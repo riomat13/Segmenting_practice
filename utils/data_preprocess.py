@@ -60,11 +60,10 @@ def _add_word_to_filename(file_path, word, to_path, copy=False):
             0321.png and word is "05" -> 05_0321.png
     """
     if file_path is None:
-        raise InputError("Input file does not exist")
+        raise ValueError("Input file does not exist")
     _to_path = os.path.join(to_path, word+'_'+os.path.basename(file_path))
     if copy:
-        shutil.copyfile(file_paths, to_path)
-        os.rename(os.path.join(to_path, os.path.basename(file_path)), _to_path)
+        shutil.copyfile(file_path, _to_path)
     else:
         os.rename(file_path, _to_path)
 
@@ -76,10 +75,10 @@ def extract_rgb_data(path, to_path, copy=True):
     for l in os.listdir(path):
         _to_path = os.path.join(to_path, l)
         makedirs_if_none(_to_path)
-        path = os.path.join(path, l, 'rgb')
-        files = glob(os.path.join(path, '*.png'))
+        _path = os.path.join(path, l, 'rgb')
+        files = glob(os.path.join(_path, '*.png'))
         for f in files:
-            _savedata(files, _to_path, copy)
+            _savedata(f, _to_path, copy)
 
 
 def pick_data_roughly(path, to_path, use_ratio=1.0, copy=True, two_levels=False, add_num=False):
@@ -110,7 +109,8 @@ def pick_data_roughly(path, to_path, use_ratio=1.0, copy=True, two_levels=False,
     nums = [i for i in xrange(0, 10, 10//use_ratio)][:use_ratio]
 
     if two_levels:
-        for n in os.listdir(path):
+        lists = [l for l in os.listdir(path) if l.isdigit()] # only work for numbered directory
+        for n in lists:
             files = _add_extracted_files(os.path.join(path, n), nums)
             if add_num:
                 for f in files:
@@ -120,7 +120,16 @@ def pick_data_roughly(path, to_path, use_ratio=1.0, copy=True, two_levels=False,
                 _savedata(files, _to_path, copy)
     else:
         files = _add_extracted_files(path, nums)
-        _savedata(files, to_path, copy)
+        for f in files:
+            _to_path = os.path.join(to_path, n)
+            _savedata(f, _to_path, copy)
+
+
+def path_to_tensor(img_path, img_size):
+    """ Convert image data to tensor"""
+    img = image.load_img(img_path, target_size=img_size)
+    x = image.img_to_array(img)
+    return np.expand_dims(x, axis=0)
 
 
 def input_img(img_path, img_size=None, expand=False):
@@ -138,7 +147,7 @@ def input_img(img_path, img_size=None, expand=False):
             3-D numpy array [image height, image width, channels]
     """
     if len(img_path) == 0:
-        raise InputError("Input is empty. Check input path.")
+        raise ValueError("Input is empty. Check input path.")
     if type(img_size)==int:
         img_size = (img_size, img_size)
     img = image.load_img(img_path, target_size=img_size)
@@ -165,7 +174,7 @@ def input_img_from_dir(dir_path, img_size=192, two_levels=False):
     else:
         paths = glob(os.path.join(dir_path, '*.png'))
     if len(paths) == 0:
-        raise InputError("Input is empty.")
+        raise ValueError("Input is empty. Check the directory path.")
     if type(img_size)==int:
         img_size = (img_size, img_size)
     img_tensors = [path_to_tensor(img_path, img_size) for img_path in tqdm(paths)]
@@ -275,7 +284,7 @@ def pixelwise_classify_images_for_one_obj(inputs, classes):
         imgs: 4D numpy array (batch, image height, image depth, class)
     """
     if len(inputs) == 0:
-        raise InputError("Input is empty.")
+        raise ValueError("Input is empty.")
 
     s = inputs.shape
     arr = np.zeros((s[0], s[1], s[2], 1))
