@@ -180,18 +180,6 @@ def input_img_from_dir(dir_path, img_size=192, two_levels=False):
     return np.vstack(img_tensors)
 
 
-def create_mask(img, num):
-    """Change object into unit color
-    Arguments:
-        img: input image
-        num: 3x1 list
-            list -> [r, g, b] color
-    Return:
-        masked image as numpy array
-    """
-    return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*num, axis=2)
-
-
 def mask_img_from_paths(path, colors):
     """Change object into unit color one and save to folder named "masks"
     Color is decided by class number from file name
