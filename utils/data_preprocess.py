@@ -9,9 +9,8 @@ from glob import glob
 from tqdm import tqdm
 from PIL import Image
 from sklearn.datasets import load_files
-from keras.preprocessing import image
 from keras.utils import np_utils
-
+from keras.preprocessing import image
 
 def makedirs_if_none(dir_path):
     if not os.path.exists(dir_path):
@@ -190,12 +189,7 @@ def create_mask(img, num):
     Return:
         masked image as numpy array
     """
-    img = cv2.imread(img)
-    for i in xrange(len(img)):
-        for j in xrange(len(img[i])):
-            if any(img[i][j]):
-                img[i][j] = num
-    return img
+    return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*num, axis=2)
 
 
 def mask_img_from_paths(path, colors):
@@ -209,12 +203,13 @@ def mask_img_from_paths(path, colors):
         colors: n colors list,  nx3x1 numpy array
             [n, r, g, b] color
     """
-    mkdir_if_none(os.path.join(path, 'masks'))
+    makedirs_if_none(os.path.join(path, 'masks'))
     files = glob(os.path.join(path, 'images', '*.png'))
     for f in tqdm(files):
         n = int(os.path.basename(f)[:2])-1 # class number -> color number
-        img = create_mask(img, colors[n])
-        Image.fromarray(img).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
+        img = cv2.imread(f)
+        img = pixelwise_classify_img(img, colors[n], colored=True)
+        Image.fromarray(img.astype('uint8')).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
 
 
 def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffle=True, seed=None):
@@ -230,7 +225,6 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
     Return:
         4-D numpy array(image), 1-D numpy array(image class)
     """
-
     if type(img_size)==int:
         img_size = (img_size, img_size)
 
@@ -245,7 +239,7 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
             imgs.extend(x)
     else:
         paths = glob(os.path.join(dir_path, '*.png'))
-        imgs = [(path_to_tensor(p, img_size), int(os.path.basename(p)[:2])) for p in paths]
+        imgs = [(path_to_tensor(p, img_size), int(os.path.basename(p)[:2])-1) for p in paths]
 
     if shuffle:
         _shuffle_data(imgs, seed)
@@ -258,40 +252,61 @@ def to_categorical_tensor(tensor, num_classes=30):
     """transform image tensor into categorical tensor"""
     return np_utils.to_categorical(tensor, num_classes)
 
-def pixelwise_classify_one_obj_img(img, num):
+
+def pixelwise_classify_img(img, num, colored=False):
     """Convert channel to class number in image which has one object
     (This is adjusted to t-less training data)
     Arguments:
         img : 3x1 array [height, width, 3(rgb)]
         num: int, class number
+        colored:
     Return:
-        [height, width, 1(num)]
+        [height, width, 1(num) or 3(rgb)]
     """
-    s = img.shape
-    arr = np.zeros((s[0], s[1], 1))
-    for i in xrange(len(img)):
-        for j in xrange(len(img[0])):
-            arr[i][j] = any(img[i][j])*num
-    return arr
+    # replace rgb with class number on pixels of object in image data
+    if colored:
+        if type(num) == int:
+            raise ValueError("Input has to be 3x1 list or tuple.")
+        return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1), axis=2) * \
+                np.tile(color_list[t[0]], img.shape[0]*img.shape[1]).reshape(img.shape)
+    else:
+        if type(num) != int:
+            raise ValueError("Input has to be an integer.")
+        return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*num, axis=2)
 
 
-def pixelwise_classify_images_for_one_obj(inputs, classes):
+def pixelwise_classify_images_for_one_obj(inputs, targets, num_classes=30, colored=False):
     """Create pixelwisely added class number to image from array
     Arguments:
         inputs: 4-D array containing image data
-        classes: 1-D array which has class numbers related to images
+        targets: 1-D array which has class numbers related to images
+        num_classes: int, total number of class
+        colored : if True, each pixel will have rgb
+                  if False, each pixel will have class number
     Return:
-        imgs: 4D numpy array (batch, image height, image depth, class)
+        imgs: 4-D numpy array [batch, image height, image depth, 1(class) or 3(rgb)]
     """
     if len(inputs) == 0:
         raise ValueError("Input is empty.")
 
-    s = inputs.shape
-    arr = np.zeros((s[0], s[1], s[2], 1))
-    for n, (img, c) in enumerate(zip(inputs, classes)):
-        for i in xrange(len(img)):
-            for j in xrange(len(img[0])):
-                arr[n][i][j] = any(img[i][j])*num
+    if colored:
+        # prepare colors for setting as mask
+        from utils import helper
+        color_list = helper.color_rgb_list()
+        # output shape => [number of data, height, width, rgb channel]
+        arr = np.zeros((inputs.shape[:3])+(3,))
+        for n, (img, t) in enumerate(zip(inputs, targets)):
+            # if a pixel has color, replace fixed color of target class
+            arr[n] = np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1), axis=2) * \
+                    np.tile(color_list[t[0]], img.shape[0]*img.shape[1]).reshape(img.shape)
+
+    else:
+        # output shape => [number of data, height, width, 1(class number)]
+        arr = np.zeros((inputs.shape[:3])+(1,))
+        for n, (img, t) in enumerate(zip(inputs, targets)):
+            # replace rgb with class number on pixels of object in image data
+            arr[n] = np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*t, axis=2)
+
     return arr
 
 ##  Not use on this time
