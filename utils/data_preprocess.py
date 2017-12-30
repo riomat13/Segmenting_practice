@@ -18,12 +18,16 @@ def makedirs_if_none(dir_path):
         os.makedirs(dir_path)
 
 
-def unzip_tless_files(path, to_path, num_folders=30):
+def unzip_tless_files(path, to_path, num_folders=30, file_type="train"):
     """Unzip files specifically for T-less files
-    This function is only to unzip for T-Less dataset"""
+    This function is only to unzip for T-Less dataset
+    file_type : "train" or "test"
+    """
+    assert file_type=="train" or file_type=="test", "file_type is not valid. Put \"train\" or \"test\"."
+
     makedirs_if_none(to_path)
     for i in xrange(1,num_folders+1):
-        with zipfile.ZipFile(os.path.join(path, 't-less_v2_train_kinect_{:02d}.zip'.format(i)), 'r') as zf:
+        with zipfile.ZipFile(os.path.join(path, 't-less_v2_{}_kinect_{:02d}.zip'.format(file_type, i)), 'r') as zf:
             zf.extractall(path=os.path.join(to_path))
 
 
@@ -239,9 +243,9 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
     return np.vstack(imgs), np.vstack(target)+add
 
 
-def to_categorical_tensor(tensor, num_classes=30):
-    """transform image tensor into categorical tensor"""
-    return np_utils.to_categorical(tensor, num_classes)
+def to_categorical_matrix(tensor, num_classes):
+    """transform image tensor into categorical matrix"""
+    return np_utils.to_categorical(tensor, num_classes).reshape(-1, tensor.shape[1], tensor.shape[2], num_classes)
 
 
 def pixelwise_classify_img(img, num, colored=False):
