@@ -3,6 +3,7 @@
 import random
 import numpy as np
 import os
+import cv2
 import zipfile, shutil
 from scipy import misc
 from glob import glob
@@ -200,7 +201,7 @@ def mask_img_from_paths(path, colors):
         Image.fromarray(img.astype('uint8')).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
 
 
-def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffle=True, seed=None):
+def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffle=True, seed=None, from_one=False):
     """Convert image data to tensor and generate class tensor
     Arguments:
         dir_path: path to image folder
@@ -210,6 +211,7 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
         two_levels: if True, assumed to be files stored a two levels folder structure
         shuffle: if True, returned data will be shuffled
         seed: int, initial internal state of the random number generator
+        from_one: if True, class number will start from 1, otherwise class number will start from 0
     Return:
         4-D numpy array(image), 1-D numpy array(image class)
     """
@@ -233,7 +235,8 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
         _shuffle_data(imgs, seed)
 
     imgs, target = zip(*imgs)
-    return np.vstack(imgs), np.vstack(target)
+    add = 1 if from_one else 0
+    return np.vstack(imgs), np.vstack(target)+add
 
 
 def to_categorical_tensor(tensor, num_classes=30):
@@ -256,19 +259,18 @@ def pixelwise_classify_img(img, num, colored=False):
         if type(num) == int:
             raise ValueError("Input has to be 3x1 list or tuple.")
         return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1), axis=2) * \
-                np.tile(color_list[t[0]], img.shape[0]*img.shape[1]).reshape(img.shape)
+                np.tile(num, img.shape[0]*img.shape[1]).reshape(img.shape)
     else:
         if type(num) != int:
             raise ValueError("Input has to be an integer.")
         return np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*num, axis=2)
 
 
-def pixelwise_classify_images_for_one_obj(inputs, targets, num_classes=30, colored=False):
+def pixelwise_classify_images_for_one_obj(inputs, targets, colored=False):
     """Create pixelwisely added class number to image from array
     Arguments:
         inputs: 4-D array containing image data
         targets: 1-D array which has class numbers related to images
-        num_classes: int, total number of class
         colored : if True, each pixel will have rgb
                   if False, each pixel will have class number
     Return:
