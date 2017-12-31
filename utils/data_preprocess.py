@@ -3,7 +3,7 @@
 import random
 import numpy as np
 import os
-import cv2
+# import cv2
 import zipfile, shutil
 from scipy import misc
 from glob import glob
@@ -27,8 +27,12 @@ def unzip_tless_files(path, to_path, num_folders=30, file_type="train"):
 
     makedirs_if_none(to_path)
     for i in xrange(1,num_folders+1):
-        with zipfile.ZipFile(os.path.join(path, 't-less_v2_{}_kinect_{:02d}.zip'.format(file_type, i)), 'r') as zf:
-            zf.extractall(path=os.path.join(to_path))
+        try:
+            with zipfile.ZipFile(os.path.join(path, 't-less_v2_{}_kinect_{:02d}.zip'.format(file_type, i)), 'r') as zf:
+                zf.extractall(path=os.path.join(to_path))
+        except:
+            print "No more folders found."
+            break
 
 
 def _shuffle_data(data, SEED):
@@ -72,17 +76,16 @@ def _add_word_to_filename(file_path, word, to_path, copy=False):
         os.rename(file_path, _to_path)
 
 
-def extract_rgb_data(path, to_path, copy=True):
+def extract_data(path, to_path, data_type='rgb', copy=True):
     """Extract rgb data from dataset
     This is specificully adjusted to T-Less dataset
+    data_type : 'rgb' or 'depth'
     """
     for l in os.listdir(path):
         _to_path = os.path.join(to_path, l)
         makedirs_if_none(_to_path)
-        _path = os.path.join(path, l, 'rgb')
-        files = glob(os.path.join(_path, '*.png'))
-        for f in files:
-            _savedata(f, _to_path, copy)
+        files = glob(os.path.join(path, l, data_type, '*.png'))
+        _savedata(files, _to_path, copy)
 
 
 def pick_data_roughly(path, to_path, use_ratio=1.0, copy=True, two_levels=False, add_num=False):
@@ -181,7 +184,31 @@ def input_img_from_dir(dir_path, img_size=192, two_levels=False):
         raise ValueError("Input is empty. Check the directory path.")
     if type(img_size)==int:
         img_size = (img_size, img_size)
+    # all image file turns into tensor then they will be listed
     img_tensors = [path_to_tensor(img_path, img_size) for img_path in tqdm(paths)]
+    return np.vstack(img_tensors)
+
+
+def input_img_with_depth_from_dir(dir_path, img_size=192):
+    """Convert image data to tensor with depth data (6-D)
+    Arguments:
+        dir_path: path to image folder
+        img_size: target image size
+            int, tuple or list
+            int -> img_size = (int, int)
+    Return:
+        4-D numpy array [dataset size, image height, image width, (rgb + depth=6-D)]
+    """
+    rgb_paths = glob(os.path.join(dir_path, 'rgb', '*.png'))
+    depth_path = glob(os.path.join(dir_path, 'depth'))
+    if type(img_size)==int:
+        img_size = (img_size, img_size)
+    # extract both rgb and depth data
+    img_tensors = []
+    for img_path in tqdm(paths):
+        # concatenate rgb and depth data thus it turns into 6-D image data
+        img_tensors.append(np.concatenate((path_to_tensor(img_path, img_size),
+                                           path_to_tensor(os.path.join(depth_path, os.path.basename(img_path)), img_size))))
     return np.vstack(img_tensors)
 
 
@@ -200,7 +227,7 @@ def mask_img_from_paths(path, colors):
     files = glob(os.path.join(path, 'images', '*.png'))
     for f in tqdm(files):
         n = int(os.path.basename(f)[:2])-1 # class number -> color number
-        img = cv2.imread(f)
+        img = misc.imread(f)
         img = pixelwise_classify_img(img, colors[n], colored=True)
         Image.fromarray(img.astype('uint8')).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
 
@@ -241,6 +268,50 @@ def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffl
     imgs, target = zip(*imgs)
     add = 1 if from_one else 0
     return np.vstack(imgs), np.vstack(target)+add
+
+
+def input_train_target_rgb_depth_from_dir(dir_path, img_size=192, num_dir=None, shuffle=True, seed=None, from_one=False):
+    """Convert image data to tensor and generate class tensor with rgb and data (6-D data)
+    Arguments:
+        dir_path: path to image folder
+        img_size: target image size
+            int, tuple or list
+            int -> img_size = (int, int)
+        num_dir: number of directories to use
+        shuffle: if True, returned data will be shuffled
+        seed: int, initial internal state of the random number generator
+        from_one: if True, class number will start from 1, otherwise class number will start from 0
+    Return:
+        4-D numpy array(image), 1-D numpy array(image class)
+    """
+    assert os.listdir(dir_path)!=[], "Directory is not found. Check input path."
+
+    if type(img_size)==int:
+        img_size = (img_size, img_size)
+
+    img_tensors = []
+    dirs = sorted(os.listdir(dir_path))
+    for path in dirs:
+        rgb_paths = glob(os.path.join(path, 'rgb', '*.png'))
+        # extract both rgb and depth data
+        # concatenate rgb and depth data thus it turns into 6-D image data
+        for p in rgb_paths:
+            try:
+                img_tensors.append(np.concatenate(
+                                        (path_to_tensor(p, img_size),
+                                         path_to_tensor(os.path.join(path, 'depth', os.path.basename(p))),img_size)),
+                                   int(path[-2:])-1)
+            except:
+                print "File not found : ", os.path.basename(p)
+
+    if shuffle:
+        _shuffle_data(img_tensors, seed)
+
+    assert img_tensors != [], "Images could not be extracted properly. Check directories or files."
+
+    img_tensors, target = zip(*img_tensors)
+    add = 1 if from_one else 0 # if from_one class number is from 1
+    return np.vstack(img_tensors), np.vstack(target)+add
 
 
 def to_categorical_matrix(tensor, num_classes):
@@ -302,10 +373,3 @@ def pixelwise_classify_images_for_one_obj(inputs, targets, colored=False):
             arr[n] = np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*t, axis=2)
 
     return arr
-
-##  Not use on this time
-# def create_6d_data():
-#     """
-#     merge rgb data and depth dataset
-#     """
-# return data
