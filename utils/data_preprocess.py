@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import random
 import numpy as np
 import os
@@ -12,6 +14,7 @@ from PIL import Image
 from sklearn.datasets import load_files
 from keras.utils import np_utils
 from keras.preprocessing import image
+
 
 def makedirs_if_none(dir_path):
     if not os.path.exists(dir_path):
@@ -31,7 +34,7 @@ def unzip_tless_files(path, to_path, num_folders=30, file_type="train"):
             with zipfile.ZipFile(os.path.join(path, 't-less_v2_{}_kinect_{:02d}.zip'.format(file_type, i)), 'r') as zf:
                 zf.extractall(path=os.path.join(to_path))
         except:
-            print "No more folders found."
+            print("No more folders found.")
             break
 
 
@@ -302,7 +305,7 @@ def input_train_target_rgb_depth_from_dir(dir_path, img_size=192, num_dir=None, 
                                          path_to_tensor(os.path.join(path, 'depth', os.path.basename(p))),img_size)),
                                    int(path[-2:])-1)
             except:
-                print "File not found : ", os.path.basename(p)
+                print("File not found : ", os.path.basename(p))
 
     if shuffle:
         _shuffle_data(img_tensors, seed)
@@ -373,3 +376,7 @@ def pixelwise_classify_images_for_one_obj(inputs, targets, colored=False):
             arr[n] = np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*t, axis=2)
 
     return arr
+
+def test_data_process(data):
+    """prepare masked data and labeled data"""
+    return masked, labeled
