@@ -15,6 +15,20 @@ def color_rgb_list():
     return color_list
 
 
+def color_class_dict():
+    """create color-class dict"""
+    color_dict = {color: i+1 for i, color in enumerate(color_rgb_list())}
+    color_dict[(0,0,0)] = 0 # for background
+    return color_dict
+
+
+def class_color_dict():
+    """create class-color dict"""
+    color_dict = {i+1:color for i, color in enumerate(color_rgb_list())}
+    color_dict[0] = (0, 0, 0) #3 for background
+    return color_dict
+
+
 def var_sizes_check(global_dic):
     """Check the size of variables used to prevent from consuming memory
     print out variables which have length or size attribute"""
