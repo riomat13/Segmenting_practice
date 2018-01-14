@@ -333,6 +333,7 @@ def to_categorical_matrix(tensor, num_classes):
     return np_utils.to_categorical(tensor, num_classes).reshape(-1, tensor.shape[1], tensor.shape[2], num_classes)
 
 
+''' not useful, may remove later
 def pixelwise_classify_img(img, num, colored=False):
     """Convert channel to class number in image which has one object
     (This is adjusted to t-less training data)
@@ -387,6 +388,37 @@ def pixelwise_classify_images_for_one_obj(inputs, targets, colored=False):
             arr[n] = np.expand_dims(np.clip(np.sum(img, axis=2), 0, 1)*t, axis=2)
 
     return arr
+'''
+
+def pixelwise_class_array(mask_files, img_shape=(128,128,3)):
+    """Convert path to arrays for classification
+    return:
+        arr: 4-D numpy array (number of files, image height, image width, 1(class number))
+    """
+#     assert len(img_files)>0, "Input image files are empty."
+    assert len(mask_files)>0, "Input mask files are empty."
+#     assert len(img_files)==len(mask_files), "Input file sizes do not match."
+
+    arr = np.zeros((len(mask_files),) + img_shape[:2] + (1,))
+
+    from utils.helper import class_color_dict
+    color_dict = class_color_dict()
+
+    for i, mk in enumerate(mask_files):
+        class_lists = list(map(int, os.path.basename(mk).split('_')[:-1])) # exract class data from file name
+        # read image and resize if required
+        mk = misc.imread(mk)
+        if mk.shape != img_shape:
+            mk = misc.imresize(mk, img_shape)
+
+        # color-class dict
+        color_dict = color_dict
+        # create pixelwisely classified array
+        for n_class in class_lists:
+            # if match with class number, 1(True), else 0(False)
+            arr[i] += np.expand_dims((mk==color_dict[n_class]).all(axis=-1), axis=-1) * n_class
+    return arr
+
 
 def test_data_process(data):
     """prepare masked data and labeled data"""
