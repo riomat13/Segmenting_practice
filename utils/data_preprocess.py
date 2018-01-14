@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
 import random
 import numpy as np
@@ -10,7 +12,7 @@ import zipfile, shutil
 from scipy import misc
 from glob import glob
 from tqdm import tqdm
-from PIL import Image
+from PIL import Image as pil_image
 from sklearn.datasets import load_files
 from keras.utils import np_utils
 from keras.preprocessing import image
@@ -136,10 +138,19 @@ def pick_data_roughly(path, to_path, use_ratio=1.0, copy=True, two_levels=False,
 
 
 def path_to_tensor(img_path, img_size):
-    """ Convert image data to tensor"""
+    """Convert image path to tensor"""
     img = image.load_img(img_path, target_size=img_size)
     x = image.img_to_array(img)
     return np.expand_dims(x, axis=0)
+
+
+def path_to_tensor_and_class(img_path, img_shape):
+    """Convert path to tensor and class"""
+    img = misc.imread(img_path)
+    if img.shape != img_shape:
+        img = misc.imresize(img, img_shape)
+    n_class = int(os.path.basename(img_path)[:2])
+    return (img, n_class)
 
 
 def input_img(img_path, img_size=None, expand=False):
@@ -232,7 +243,7 @@ def mask_img_from_paths(path, colors):
         n = int(os.path.basename(f)[:2])-1 # class number -> color number
         img = misc.imread(f)
         img = pixelwise_classify_img(img, colors[n], colored=True)
-        Image.fromarray(img.astype('uint8')).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
+        pil_image.fromarray(img.astype('uint8')).save(os.path.join(path, 'masks', os.path.basename(f)), format='png')
 
 
 def input_train_target_from_dir(dir_path, img_size=192, two_levels=False, shuffle=True, seed=None, from_one=False):
