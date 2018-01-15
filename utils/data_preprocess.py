@@ -420,6 +420,19 @@ def pixelwise_class_array(mask_files, img_shape=(128,128,3)):
     return arr
 
 
+def pixelwise_array_to_img(arr, n_classes=30):
+    """Convert pixelwise class array to image
+    """
+    from utils.helper import class_color_dict
+    color_dict = class_color_dict()
+
+    imgs = np.zeros(arr.shape[:3] + (3,)) # convert to rgb
+    for i in xrange(n_classes):
+        imgs += (arr==i+1) * color_dict[i+1]
+
+    return imgs.astype(np.uint8)
+
+
 def test_data_process(data):
     """prepare masked data and labeled data"""
     return masked, labeled
